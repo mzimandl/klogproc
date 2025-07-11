@@ -237,6 +237,60 @@ func (c *ESClient) count(query []byte) (int, error) {
 	return 0, err2
 }
 
+type SnapshotMetadata struct {
+	TakenBy      string `json:"taken_by"`
+	TakenBecause string `json:"taken_because"`
+}
+
+type SnapshotArgs struct {
+	Indices            string           `json:"indices"`
+	IgnoreUnavailable  bool             `json:"ignore_unavailable"`
+	IncludeGlobalState bool             `json:"include_global_state"`
+	Metadata           SnapshotMetadata `json:"metadata"`
+}
+
+type SnapshotInfo struct {
+	Snapshot           string   `json:"snapshot"`
+	UUID               string   `json:"uuid"`
+	Repository         string   `json:"repository"`
+	VersionID          any      `json:"version_id"`
+	Version            any      `json:"version"`
+	Indices            []string `json:"indices"`
+	DataStreams        []string `json:"data_streams"`
+	IncludeGlobalState bool     `json:"include_global_state"`
+	FeatureStates      []any    `json:"feature_states"`
+	Metadata           struct {
+		TakenBy      string `json:"taken_by"`
+		TakenBecause string `json:"taken_because"`
+	} `json:"metadata"`
+	State             string `json:"state"`
+	StartTime         string `json:"start_time"`
+	StartTimeInMillis int64  `json:"start_time_in_millis"`
+	EndTime           string `json:"end_time"`
+	EndTimeInMillis   int64  `json:"end_time_in_millis"`
+	DurationInMillis  int64  `json:"duration_in_millis"`
+	Failures          []any  `json:"failures"`
+	Shards            struct {
+		Total      int `json:"total"`
+		Successful int `json:"successful"`
+		Failed     int `json:"failed"`
+	} `json:"shards"`
+}
+
+// count is a low level count function
+func (c *ESClient) snapshot(repository string, name string, query []byte) (*SnapshotInfo, error) {
+	path := "/_snapshot/" + repository + "/" + name
+	resp, err := c.Do("POST", path, query)
+	if err != nil {
+		return nil, err
+	}
+	var snapshotInfo SnapshotInfo
+	if err2 := json.Unmarshal(resp, &snapshotInfo); err2 != nil {
+		return nil, err2
+	}
+	return &snapshotInfo, nil
+}
+
 // FetchScroll fetch additional data from an existing result
 // using a scrollId.
 func (c *ESClient) FetchScroll(scrollID string, ttl string) (Result, error) {
@@ -338,4 +392,10 @@ func (c *ESClient) CountRecords(appType string, filters []DocFilter) (int, error
 		count += c
 	}
 	return count, nil
+}
+
+// Create backup snapshot
+func (c *ESClient) Snapshot() error {
+	_, err := c.snapshot("backup", "snapshot", []byte("{}"))
+	return err
 }
